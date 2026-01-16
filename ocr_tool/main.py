@@ -86,16 +86,16 @@ def perform_capture():
         print(f"Error in capture logic: {e}")
 
 def setup_hotkey():
-    keyboard.add_hotkey('ctrl+shift+o', perform_capture)
-    keyboard.add_hotkey('ctrl+shift+p', exit_app_hotkey)
+    keyboard.add_hotkey('ctrl+alt+shift+o', perform_capture)
+    keyboard.add_hotkey('ctrl+alt+shift+p', exit_app_hotkey)
 
 
 def main():
     global icon
     setup_hotkey()
     print("Background OCR Service Running...")
-    print("Press Ctrl+Shift+O to capture.")
-    print("Press Ctrl+Shift+P to exit.")
+    print("Press Ctrl+Alt+Shift+O to capture.")
+    print("Press Ctrl+Alt+Shift+P to exit.")
     
     icon = pystray.Icon("OCR Tool")
     icon.menu = pystray.Menu(pystray.MenuItem('Quit', on_quit))
