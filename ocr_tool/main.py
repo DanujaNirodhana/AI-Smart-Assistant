@@ -6,13 +6,18 @@ import pystray
 from PIL import Image, ImageDraw
 import sys
 import os
+import difflib
+import re
 
 from overlay import RegionSelection
 from ocr_engine import OCREngine
-from comms import copy_to_clipboard, send_via_serial
+from comms import copy_to_clipboard
 
-# Load Config
+# --------------------------
+# Config and DB paths
+# --------------------------
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config.json')
+DB_FILE = os.path.join(os.path.dirname(__file__), 'errors_db.json')
 
 def load_config():
     if os.path.exists(CONFIG_PATH):
@@ -22,22 +27,58 @@ def load_config():
 
 config = load_config()
 TESSERACT_CMD = config.get("tesseract_cmd", r"C:\Program Files\Tesseract-OCR\tesseract.exe")
-SERIAL_PORT = config.get("serial_port", "COM3")
-BAUD_RATE = config.get("baud_rate", 9600)
 
-
-
-# Global icon reference for hotkey access
+# --------------------------
+# OCR Engine Init
+# --------------------------
 icon = None
-
+running = True
 ocr = None
 try:
     ocr = OCREngine(TESSERACT_CMD)
 except Exception as e:
     print(f"OCR Engine Init Error: {e}")
 
+# --------------------------
+# Error DB Helpers
+# --------------------------
+def normalize_text(text: str) -> str:
+    text = text.lower()
+    text = text.replace("’", "'")
+    text = re.sub(r"[^a-z0-9.\s]", " ", text)  # remove punctuation except dot
+    return " ".join(text.split())  # collapse whitespace
+
+def load_db() -> dict:
+    if not os.path.exists(DB_FILE):
+        return {}
+    with open(DB_FILE, "r", encoding="utf-8") as f:
+        raw = json.load(f)
+    # normalize keys to lowercase
+    return {k.lower(): v for k, v in raw.items()}
+
+def find_error_solution(text: str):
+    db = load_db()
+    normalized = normalize_text(text)
+
+    print("Normalized OCR:", normalized)  # debug
+
+    for key, value in db.items():
+        if key in normalized:
+            print(f"✅ Exact match for key: {key}")
+            return value
+        # fuzzy similarity
+        ratio = difflib.SequenceMatcher(None, key, normalized).ratio()
+        if ratio > 0.6:
+            print(f"🤏 Fuzzy match for key: {key} (score {ratio:.2f})")
+            return value
+
+    print("❌ No match found")
+    return None
+
+# --------------------------
+# Tray Icon
+# --------------------------
 def create_icon_image():
-    # Create a simple icon for the tray
     width = 64
     height = 64
     image = Image.new('RGB', (width, height), color=(255, 255, 255))
@@ -46,38 +87,45 @@ def create_icon_image():
     return image
 
 def on_quit(icon_obj, item):
+    global running
+    running = False
     icon_obj.stop()
-    sys.exit()
 
 def exit_app_hotkey():
+    global running
     print("Exit hotkey pressed. Exiting...")
+    running = False
     if icon:
         icon.stop()
-    # Force exit to ensure all threads (like keyboard) are killed
-    os._exit(0)
 
+# --------------------------
+# Capture Logic
+# --------------------------
 def perform_capture():
     print("Hotkey triggered!")
-    # Capture Region
     try:
-        # NOTE: Tkinter needs to run in the main thread ideally, or be very careful. 
-        # Since this is called from a hotkey thread, creating a new Tk instance *might* work 
-        # if no other Tk instance is running.
         region_selector = RegionSelection()
-        selection = region_selector.get_region() # This blocks until selection is made
-        
+        selection = region_selector.get_region()
+
         if selection:
             print(f"Region selected: {selection}")
-            # OCR
+
             if ocr:
                 text = ocr.capture_and_extract(selection)
+
                 if text:
                     print(f"Extracted Text: {text}")
-                    # Outputs
                     copy_to_clipboard(text)
-                    send_via_serial(text, SERIAL_PORT, BAUD_RATE)
+
+                    # 🔍 Check local error DB
+                    solution = find_error_solution(text)
+                    if solution:
+                        print(f"[LOCAL DB MATCH] Category: {solution['category']}")
+                        print(f"Suggested Fix: {solution['solution']}")
+                    else:
+                        print("[LOCAL DB] No match found. Consider AI fallback.")
                 else:
-                    print("No text detected.")
+                    print("No text detected. Try selecting a larger area or clearer text.")
             else:
                 print("OCR engine not initialized.")
         else:
@@ -85,24 +133,40 @@ def perform_capture():
     except Exception as e:
         print(f"Error in capture logic: {e}")
 
+# --------------------------
+# Hotkeys and Tray
+# --------------------------
 def setup_hotkey():
     keyboard.add_hotkey('ctrl+alt+shift+o', perform_capture)
     keyboard.add_hotkey('ctrl+alt+shift+p', exit_app_hotkey)
 
-
-def main():
+def start_tray_icon():
     global icon
+    icon = pystray.Icon("OCR Tool")
+    icon.menu = pystray.Menu(pystray.MenuItem('Quit', on_quit))
+    icon.icon = create_icon_image()
+    icon.title = "OCR Tool"
+    icon.run()
+
+# --------------------------
+# Main Loop
+# --------------------------
+def main():
     setup_hotkey()
     print("Background OCR Service Running...")
     print("Press Ctrl+Alt+Shift+O to capture.")
     print("Press Ctrl+Alt+Shift+P to exit.")
     
-    icon = pystray.Icon("OCR Tool")
-    icon.menu = pystray.Menu(pystray.MenuItem('Quit', on_quit))
-    icon.icon = create_icon_image()
-    icon.title = "OCR Tool"
-    
-    icon.run()
+    # Start tray icon in background thread
+    tray_thread = threading.Thread(target=start_tray_icon, daemon=True)
+    tray_thread.start()
+
+    # Loop until exit hotkey pressed
+    while running:
+        time.sleep(0.5)
+
+    print("Exiting program...")
+    os._exit(0)
 
 if __name__ == "__main__":
     main()
