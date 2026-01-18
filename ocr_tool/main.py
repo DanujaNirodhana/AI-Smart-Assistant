@@ -40,7 +40,7 @@ def create_icon_image():
     # Create a simple icon for the tray
     width = 64
     height = 64
-    image = Image.new('RGB', (width, height), color=(255, 255, 255))
+    image = Image.new('RGB', (width, height), color=(0, 0, 0))
     dc = ImageDraw.Draw(image)
     dc.rectangle((16, 16, 48, 48), fill=(0, 0, 0))
     return image
@@ -101,7 +101,6 @@ def main():
     icon.menu = pystray.Menu(pystray.MenuItem('Quit', on_quit))
     icon.icon = create_icon_image()
     icon.title = "OCR Tool"
-    
     icon.run()
 
 if __name__ == "__main__":
