@@ -99,7 +99,7 @@ def exit_app_hotkey():
         icon.stop()
 
 # --------------------------
-# Capture Logic
+# Capture Logic hey
 # --------------------------
 def perform_capture():
     print("Hotkey triggered!")
