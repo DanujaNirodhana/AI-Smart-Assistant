@@ -48,6 +48,8 @@ def normalize_text(text: str) -> str:
     text = re.sub(r"[^a-z0-9.\s]", " ", text)  # remove punctuation except dot
     return " ".join(text.split())  # collapse whitespace
 
+
+
 def load_db() -> dict:
     if not os.path.exists(DB_FILE):
         return {}
