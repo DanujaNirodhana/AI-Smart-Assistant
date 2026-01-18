@@ -81,7 +81,7 @@ def find_error_solution(text: str):
 def create_icon_image():
     width = 64
     height = 64
-    image = Image.new('RGB', (width, height), color=(255, 255, 255))
+    image = Image.new('RGB', (width, height), color=(0, 0, 0))
     dc = ImageDraw.Draw(image)
     dc.rectangle((16, 16, 48, 48), fill=(0, 0, 0))
     return image
