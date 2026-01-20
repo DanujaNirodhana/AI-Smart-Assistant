@@ -4,6 +4,7 @@ import time
 import os
 import ctypes
 from ctypes import windll
+import queue
 
 # --- Configuration ---
 FPS = 60
@@ -91,7 +92,7 @@ class LiquidBlob:
         else:
             surface.blit(self.surface, (x - self.max_radius, y - self.max_radius), special_flags=pygame.BLEND_ADD)
 
-def main():
+def main(command_queue=None):
     # 1. Setup
     user32 = ctypes.windll.user32
     screen_w = user32.GetSystemMetrics(0)
@@ -125,27 +126,69 @@ def main():
     center_pos = (screen_w // 2, screen_h - 200)
     
     clock = pygame.time.Clock()
-    start_time = time.time()
+    
+    # State: 0 = IDLE (Hidden), 1 = ACTIVE (Visible/Animating)
+    state = 0 
+    
+    # Initially clear and update once to ensure transparency
+    screen.fill(BG_COLOR)
+    pygame.display.flip()
     
     running = True
+    start_time = time.time() # This will be reset when Activating
+
     while running:
+        # Check for commands (Drain the queue)
+        if command_queue:
+            try:
+                # Process all available commands
+                while True:
+                    cmd = command_queue.get_nowait()
+                    if cmd == "START":
+                        state = 1
+                        start_time = time.time()
+                    elif cmd == "STOP":
+                        state = 0
+                    elif cmd == "QUIT":
+                        running = False
+            except queue.Empty:
+                pass
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+            # Optional: Allow Escape to quit if window is focused (mainly for debugging)
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                running = False
+                # In production we might not want ESC to kill the background process, 
+                # but for safety we'll keep it or let main app handle it.
+                # Let's just HIDE on escape for now to be safe? 
+                # Or just ignore local ESC and rely on queue.
+                pass
         
-        # Force TopMost
-        user32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x0001 | 0x0002)
+        if state == 1:
+            # --- ACTIVE ---
+            # Force TopMost only when active
+            user32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x0001 | 0x0002)
 
-        screen.fill(BG_COLOR)
-        t = time.time() - start_time
-        
-        for blob in blobs:
-            blob.draw(screen, center_pos, t)
+            screen.fill(BG_COLOR)
+            t = time.time() - start_time
             
-        pygame.display.flip()
-        clock.tick(FPS)
+            for blob in blobs:
+                blob.draw(screen, center_pos, t)
+                
+            pygame.display.flip()
+            clock.tick(FPS)
+            
+        else:
+            # --- IDLE ---
+            # Make sure screen is cleared to transparent color
+            # We do this once per idle loop or just once on transition?
+            # Doing it continuously is safer to prevent artifacts, but we can sleep longer.
+            screen.fill(BG_COLOR)
+            pygame.display.flip()
+            
+            # Sleep to save CPU
+            time.sleep(0.1)
 
     pygame.quit()
 

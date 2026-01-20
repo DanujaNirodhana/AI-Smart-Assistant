@@ -46,12 +46,15 @@ except Exception as e:
 # --------------------------
 # Animation Helper (New)
 # --------------------------
-def run_animation_process():
+animation_queue = None
+animation_process_ref = None
+
+def run_animation_process(queue):
     """
-    Launches the full-screen transparent animation.
+    Launches the full-screen transparent animation in background.
     """
     try:
-        animation.main()
+        animation.main(queue)
     except Exception as e:
         print(f"Animation error: {e}")
 
@@ -101,12 +104,32 @@ def create_icon_image():
 
 def on_quit(icon_obj, item):
     global running
+    try:
+        if animation_queue:
+            animation_queue.put("QUIT")
+        if animation_process_ref and animation_process_ref.is_alive():
+            animation_process_ref.join(timeout=1)
+            # Force terminate if it doesn't close
+            if animation_process_ref.is_alive():
+                animation_process_ref.terminate()
+    except:
+        pass
+
     running = False
     icon_obj.stop()
 
 def exit_app_hotkey():
     global running
     print("Exit hotkey pressed. Exiting...")
+    
+    try:
+        if animation_queue:
+            animation_queue.put("QUIT")
+        if animation_process_ref and animation_process_ref.is_alive():
+            animation_process_ref.terminate()
+    except:
+        pass
+    
     running = False
     if icon:
         icon.stop()
@@ -116,13 +139,16 @@ def exit_app_hotkey():
 # --------------------------
 def perform_capture():
     print("Hotkey triggered!")
-    anim_process = None  # <--- Track the process
-
+    
     try:
-        # 1. Start Animation
-        anim_process = multiprocessing.Process(target=run_animation_process)
-        anim_process.start()
-
+        # 1. Trigger Animation
+        if animation_queue:
+            animation_queue.put("START")
+        
+        # Give a split second for the animation to fade in or appear 
+        # (Though we want it instant, but if it takes ms to render first frame)
+        # Actually with the queue it should be near instant.
+        
         # 2. Run Existing Selection Logic
         region_selector = RegionSelection()
         selection = region_selector.get_region()
@@ -162,10 +188,9 @@ def perform_capture():
         print(f"Error in capture logic: {e}")
     
     finally:
-        # 3. Always close animation when done
-        if anim_process and anim_process.is_alive():
-            anim_process.terminate()
-            anim_process.join()
+        # 3. Stop Animation
+        if animation_queue:
+            animation_queue.put("STOP")
 
 # --------------------------
 # Hotkeys and Tray
@@ -186,6 +211,14 @@ def start_tray_icon():
 # Main Loop
 # --------------------------
 def main():
+    global animation_queue, animation_process_ref
+
+    # Start Animation Process
+    animation_queue = multiprocessing.Queue()
+    animation_process_ref = multiprocessing.Process(target=run_animation_process, args=(animation_queue,))
+    animation_process_ref.daemon = True
+    animation_process_ref.start()
+
     setup_hotkey()
     print("Background OCR Service Running...")
     print("Press Ctrl+Alt+Shift+O to capture.")
@@ -198,6 +231,13 @@ def main():
         time.sleep(0.5)
 
     print("Exiting program...")
+    try:
+        if animation_queue:
+            animation_queue.put("QUIT")
+        if animation_process_ref:
+            animation_process_ref.join(timeout=1)
+    except:
+        pass
     os._exit(0)
 
 if __name__ == "__main__":
