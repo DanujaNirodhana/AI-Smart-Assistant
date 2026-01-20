@@ -29,7 +29,7 @@ config = load_config()
 TESSERACT_CMD = config.get("tesseract_cmd", r"C:\Program Files\Tesseract-OCR\tesseract.exe")
 
 # --------------------------
-# OCR Engine Init
+# OCR Engine Initialize
 # --------------------------
 icon = None
 running = True
