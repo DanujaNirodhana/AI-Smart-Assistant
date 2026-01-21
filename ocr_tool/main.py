@@ -129,6 +129,11 @@ def perform_capture():
         if selection:
             print(f"Region selected: {selection}")
 
+            # 3. Stop Animation BEFORE capture to avoid blocking text
+            if anim_process and anim_process.is_alive():
+                anim_process.terminate()
+                anim_process.join()
+
             if ocr:
                 text = ocr.capture_and_extract(selection)
 
@@ -154,7 +159,7 @@ def perform_capture():
         print(f"Error in capture logic: {e}")
     
     finally:
-        # 3. Always close animation when done
+        # Cleanup if something failed
         if anim_process and anim_process.is_alive():
             anim_process.terminate()
             anim_process.join()
