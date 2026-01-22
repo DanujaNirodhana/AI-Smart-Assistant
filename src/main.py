@@ -9,10 +9,10 @@ import os
 import difflib
 import re
 
-from overlay import RegionSelection
-from ocr_engine import OCREngine
-from comms import copy_to_clipboard
-from mistral_client import MistralClient
+from src.ocr_module.overlay import RegionSelection
+from src.ocr_module.engine import OCREngine
+from src.automation.comms import copy_to_clipboard
+# from src.ai_module.client import MistralClient
 
 # --------------------------
 # Config and DB paths
@@ -39,6 +39,12 @@ try:
     ocr = OCREngine(TESSERACT_CMD)
 except Exception as e:
     print(f"OCR Engine Init Error: {e}")
+
+# --------------------------
+# Concurrency Control
+# --------------------------
+capture_event = threading.Event()
+is_processing = False
 
 # --------------------------
 # Error DB Helpers
@@ -104,7 +110,16 @@ def exit_app_hotkey():
 # --------------------------
 # Capture Logic hey
 # --------------------------
-def perform_capture():
+def trigger_capture():
+    global is_processing
+    if is_processing:
+        print("Capture in progress... ignoring press.")
+        return
+    print("Hotkey triggered! Queueing capture...")
+    is_processing = True
+    capture_event.set()
+
+def run_capture_logic():
     print("Hotkey triggered!")
     try:
         region_selector = RegionSelection()
@@ -126,34 +141,36 @@ def perform_capture():
                         print(f"[LOCAL DB MATCH] Category: {solution['category']}")
                         print(f"Suggested Fix: {solution['solution']}")
                     else:
-                        print("[LOCAL DB] No match found. Using AI fallback...")
+                        # print("[LOCAL DB] No match found. Using AI fallback...")
 
-                        # AI fallback
-                        ai_client = MistralClient()
-                        ai_response = ai_client.generate(
-                            f"The following error was detected: {text}. "
-                            f"Suggest a possible fix."
-                        )
+                        # # AI fallback
+                        # ai_client = MistralClient()
+                        # ai_response = ai_client.generate(
+                        #     f"The following error was detected: {text}. "
+                        #     f"Suggest a possible fix."
+                        # )
 
-                        if "error" in ai_response:
-                            print(f"[AI ERROR] {ai_response['error']}")
-                        else:
-                            suggestion = ai_response.get("response") or ai_response.get("text")
-                            print(f"[AI SUGGESTION] {suggestion}")
+                        # if "error" in ai_response:
+                        #     print(f"[AI ERROR] {ai_response['error']}")
+                        # else:
+                        #     suggestion = ai_response.get("response") or ai_response.get("text")
+                        #     print(f"[AI SUGGESTION] {suggestion}")
 
-                            # 📝 Cache AI suggestion into local DB
-                            try:
-                                db = load_db()
-                                normalized = normalize_text(text)
-                                db[normalized] = {
-                                    "category": "AI-generated",
-                                    "solution": suggestion
-                                }
-                                with open(DB_FILE, "w", encoding="utf-8") as f:
-                                    json.dump(db, f, indent=4, ensure_ascii=False)
-                                print("[CACHE] AI suggestion saved to local DB.")
-                            except Exception as e:
-                                print(f"[CACHE ERROR] Could not save AI suggestion: {e}")
+                        #     # 📝 Cache AI suggestion into local DB
+                        #     try:
+                        #         db = load_db()
+                        #         normalized = normalize_text(text)
+                        #         db[normalized] = {
+                        #             "category": "AI-generated",
+                        #             "solution": suggestion
+                        #         }
+                        #         with open(DB_FILE, "w", encoding="utf-8") as f:
+                        #             json.dump(db, f, indent=4, ensure_ascii=False)
+                        #         print("[CACHE] AI suggestion saved to local DB.")
+                        #     except Exception as e:
+                        #         print(f"[CACHE ERROR] Could not save AI suggestion: {e}")
+                        
+                        print("No match found in local DB.")
 
                 else:
                     print("No text detected. Try selecting a larger area or clearer text.")
@@ -168,7 +185,7 @@ def perform_capture():
 # Hotkeys and Tray
 # --------------------------
 def setup_hotkey():
-    keyboard.add_hotkey('ctrl+alt+shift+o', perform_capture)
+    keyboard.add_hotkey('ctrl+alt+shift+o', trigger_capture)
     keyboard.add_hotkey('ctrl+alt+shift+p', exit_app_hotkey)
 
 def start_tray_icon():
@@ -194,7 +211,15 @@ def main():
 
     # Loop until exit hotkey pressed
     while running:
-        time.sleep(0.5)
+        if capture_event.is_set():
+            capture_event.clear()
+            try:
+                run_capture_logic()
+            except Exception as e:
+                print(f"Error during capture: {e}")
+            finally:
+                is_processing = False
+        time.sleep(0.1)
 
     print("Exiting program...")
     os._exit(0)
