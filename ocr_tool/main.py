@@ -18,7 +18,7 @@ from comms import copy_to_clipboard
 import animation  # <--- Added (Make sure animation.py is in the same folder)
 
 # --------------------------
-# Config and DB paths
+# Config and DB pathss
 # --------------------------
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config.json')
 DB_FILE = os.path.join(os.path.dirname(__file__), 'errors_db.json')

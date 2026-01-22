@@ -7,7 +7,7 @@ from ctypes import windll
 import queue
 
 # --- Configuration ---
-FPS = 60
+FPS = 70
 # Reduced window size for a tighter look
 WIDTH, HEIGHT = 350, 350 
 BG_COLOR = (5, 0, 10)     # Dark background (transparent key)
