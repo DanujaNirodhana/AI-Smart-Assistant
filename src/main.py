@@ -180,8 +180,34 @@ def run_capture_logic():
 
                         ai_client = MistralClient()
                         ai_response = ai_client.generate(
+                        """You are a technical troubleshooting assistant.
+
+                            Your task:
+                            1. Identify what the error message is about.
+                            2. Explain the root cause in simple technical terms.
+                            3. Provide clear, step-by-step instructions to fix the issue.
+                            4. If multiple solutions exist, list them from safest to most advanced.
+                            5. Do NOT include unnecessary theory.
+                            6. Assume the user is a student with basic computer knowledge.
+
+                            Output format MUST be:
+
+                            ERROR SUMMARY:
+                            <short explanation>
+
+                            POSSIBLE CAUSES:
+                            - cause 1
+                            - cause 2
+
+                            STEP-BY-STEP FIX:
+                            1. Step one
+                            2. Step two
+                            3. Step three
+
+                            WARNINGS (if any):
+                            - warning
+                            """
                             f"The following error was detected: {text}. "
-                            f"Suggest a possible fix."
                         )
 
                         if "error" in ai_response:
