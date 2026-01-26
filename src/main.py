@@ -183,7 +183,7 @@ def run_capture_logic():
                         """You are a technical troubleshooting assistant.
 
                             Your task:
-                            1. Identify what the error message is about.
+                            1. Identify what the error message is about.but some time the messge is not an error.. then jest tell it is not an error and explain why.then return
                             2. Explain the root cause in simple technical terms.
                             3. Provide clear, step-by-step instructions to fix the issue.
                             4. If multiple solutions exist, list them from safest to most advanced.
